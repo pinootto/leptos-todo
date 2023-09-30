@@ -187,11 +187,10 @@ pub fn show_todos() -> impl IntoView {
                     view! {
                         {todo.id}<br/>
                         // {todo.text.clone()}<br/>
-                        {&todo.text}<br/>
+                        // {&todo.text}<br/>
                         // Completed: {todo.completed}<br/>
-                        {done}<br/>
                         <label>
-                            "Change text: "
+                            // "Change text: "
                             <input
                                 type="text"
                                 // prop:value=move || "".to_string()
@@ -207,6 +206,7 @@ pub fn show_todos() -> impl IntoView {
                             />
                         </label>
                         <br/>
+                        {done}<br/>
                         <button on:click=move |_| {
                                 set_delete_id.update(|n| *n = t.id);
                                 // todos.refetch();
