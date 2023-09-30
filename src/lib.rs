@@ -97,7 +97,21 @@ async fn update_todo_completed(todo: Todo) -> Result<String> {
         .await?
         .text()
         .await?;
-    println!("updated todo = {body}");
+    println!("updated todo completed = {body}");
+    Ok(body)
+}
+
+async fn update_todo_text(todo: Todo) -> Result<String> {
+    let mut map = HashMap::new();
+    map.insert("text", todo.text);
+    let body = Client::new()
+        .put(format!("http://localhost:3000/todos/{}", todo.id))
+        .json(&map)
+        .send()
+        .await?
+        .text()
+        .await?;
+    println!("updated todo text = {body}");
     Ok(body)
 }
 
@@ -105,7 +119,8 @@ pub fn show_todos() -> impl IntoView {
     let (todo_count, set_todo_count) = create_signal::<TodoCount>(1);
     let (delete_id, set_delete_id) = create_signal::<i32>(0);
     let (new_todo_text, set_new_todo_text) = create_signal("".to_string());
-    let (updated_todo, set_updated_todo) = create_signal::<Todo>(Todo::new());
+    let (todo_completed, set_todo_completed) = create_signal::<Todo>(Todo::new());
+    let (todo_text, set_todo_text) = create_signal::<Todo>(Todo::new());
 
     // we'll use a NodeRef to store a reference to the input element
     // this will be filled when the element is created
@@ -113,7 +128,7 @@ pub fn show_todos() -> impl IntoView {
 
     // fires when the form `submit` event happens
     // this will store the value of the <input> in our signal
-    let on_submit = move |ev: SubmitEvent| {
+    let on_submit_new_todo_text = move |ev: SubmitEvent| {
         // stop the page from reloading!
         ev.prevent_default();
 
@@ -129,6 +144,34 @@ pub fn show_todos() -> impl IntoView {
         set_new_todo_text(value);
     };
 
+    // we'll use a NodeRef to store a reference to the input element
+    // this will be filled when the element is created
+    let todo_text_input_element: NodeRef<Input> = create_node_ref();
+
+    // fires when the form `submit` event happens
+    // this will store the value of the <input> in our signal
+    let on_submit_update_todo_text = move |ev: SubmitEvent| {
+        // stop the page from reloading!
+        ev.prevent_default();
+
+        // here, we'll extract the value from the input
+        let value = todo_text_input_element()
+            // event handlers can only fire after the view
+            // is mounted to the DOM, so the `NodeRef` will be `Some`
+            .expect("<input> to exist")
+            // `NodeRef` implements `Deref` for the DOM element type
+            // this means we can call`HtmlInputElement::value()`
+            // to get the current value of the input
+            .value();
+        set_todo_text.update(|tu| {
+            *tu = Todo {
+                id: tu.id,
+                text: value,
+                completed: tu.completed,
+            }
+        });
+    };
+
     // we use local_resource here because
     // 1) our error type isn't serializable/deserializable
     // 2) we're not doing server-side rendering in this example anyway
@@ -136,7 +179,8 @@ pub fn show_todos() -> impl IntoView {
     let todos = create_local_resource(todo_count, fetch_todos);
     let deleted_todo = create_local_resource(delete_id, delete_todo);
     let new_todo = create_local_resource(new_todo_text, create_todo);
-    let completed_todo = create_local_resource(updated_todo, update_todo_completed);
+    let completed_todo = create_local_resource(todo_completed, update_todo_completed);
+    let updated_todo = create_local_resource(todo_text, update_todo_text);
 
     let fallback = move |errors: RwSignal<Errors>| {
         let error_list = move || {
@@ -167,31 +211,59 @@ pub fn show_todos() -> impl IntoView {
                 .map(|todo| {
                     let t = todo.clone();
                     view! {
-                     {todo.id}<br/>
-                     // {todo.text.clone()}<br/>
-                     {&todo.text}<br/>
-                     {todo.completed}<br/>
-                     <button on:click=move |_| {
-                            set_delete_id.update(|n| *n = t.id);
-                            // todos.refetch();
-                            // set_todo_count.update(|n| *n -= 1);
-                            // set_todo_count(todo_count.get() - 1);
-                        }>
-                        "Delete"
-                     </button>
-                     <button on:click=move |_| {
-                            set_updated_todo.update(|tc| {
-                                    *tc = Todo {
+                         {todo.id}<br/>
+                         // {todo.text.clone()}<br/>
+                         {&todo.text}<br/>
+                         {todo.completed}<br/>
+                         // <form on:submit=on_submit_update_todo_text>
+                         //    <input type="text"
+                         //        // here, we use the `value` *attribute* to set only
+                         //        // the initial value, letting the browser maintain
+                         //        // the state after that
+                         //        value=todo_text
+                         //
+                         //        // store a reference to this input in `input_element`
+                         //        node_ref=todo_text_input_element
+                         //    />
+                         //    <input type="submit" value="Update"/>
+                         // </form>
+                         // <p>"Todo text is: " {todo_text.get().text}</p>
+                        <label>
+                            "Update text: "
+                            <input
+                                type="text"
+                                prop:value=move || "".to_string()
+                                on:change=move |ev| {
+                                    let val = event_target_value(&ev);
+                                    set_todo_text(Todo {
                                         id: t.id,
-                                        text: t.text.clone(),
-                                        completed: true,
-                                    }
-                                });
-                        }>
-                        "Complete"
-                     </button>
-                     <br/>
-                     <br/>
+                                        text: val,
+                                        completed: t.completed,
+                                    })
+                                }
+                            />
+                        </label>
+                         <button on:click=move |_| {
+                                set_delete_id.update(|n| *n = t.id);
+                                // todos.refetch();
+                                // set_todo_count.update(|n| *n -= 1);
+                                // set_todo_count(todo_count.get() - 1);
+                            }>
+                            "Delete"
+                         </button>
+                         <button on:click=move |_| {
+                                set_todo_completed.update(|tc| {
+                                        *tc = Todo {
+                                            id: t.id,
+                                            text: t.text.clone(),
+                                            completed: true,
+                                        }
+                                    });
+                            }>
+                            "Complete"
+                         </button>
+                         <br/>
+                         <br/>
                     }
                 })
                 .collect_view()
@@ -236,7 +308,7 @@ pub fn show_todos() -> impl IntoView {
             <br/>
             <br/>
             New Todo:
-            <form on:submit=on_submit>
+            <form on:submit=on_submit_new_todo_text>
                 <input type="text"
                     // here, we use the `value` *attribute* to set only
                     // the initial value, letting the browser maintain
