@@ -11,6 +11,16 @@ pub struct Todo {
     completed: bool,
 }
 
+impl Todo {
+    fn new() -> Self {
+        Todo {
+            id: 0,
+            text: "".to_string(),
+            completed: false,
+        }
+    }
+}
+
 #[derive(Error, Clone, Debug)]
 pub enum TodoError {
     #[error("Please request more than zero todos.")]
@@ -77,14 +87,29 @@ async fn create_todo(text: String) -> Result<String> {
     }
 }
 
+async fn update_todo_completed(todo: Todo) -> Result<String> {
+    let mut map = HashMap::new();
+    map.insert("completed", todo.completed);
+    let body = Client::new()
+        .put(format!("http://localhost:3000/todos/{}", todo.id))
+        .json(&map)
+        .send()
+        .await?
+        .text()
+        .await?;
+    println!("updated todo = {body}");
+    Ok(body)
+}
+
 pub fn show_todos() -> impl IntoView {
     let (todo_count, set_todo_count) = create_signal::<TodoCount>(1);
     let (delete_id, set_delete_id) = create_signal::<i32>(0);
-    let (todo_text, set_todo_text) = create_signal("".to_string());
+    let (new_todo_text, set_new_todo_text) = create_signal("".to_string());
+    let (updated_todo, set_updated_todo) = create_signal::<Todo>(Todo::new());
 
     // we'll use a NodeRef to store a reference to the input element
     // this will be filled when the element is created
-    let input_element: NodeRef<Input> = create_node_ref();
+    let new_todo_text_input_element: NodeRef<Input> = create_node_ref();
 
     // fires when the form `submit` event happens
     // this will store the value of the <input> in our signal
@@ -93,7 +118,7 @@ pub fn show_todos() -> impl IntoView {
         ev.prevent_default();
 
         // here, we'll extract the value from the input
-        let value = input_element()
+        let value = new_todo_text_input_element()
             // event handlers can only fire after the view
             // is mounted to the DOM, so the `NodeRef` will be `Some`
             .expect("<input> to exist")
@@ -101,7 +126,7 @@ pub fn show_todos() -> impl IntoView {
             // this means we can call`HtmlInputElement::value()`
             // to get the current value of the input
             .value();
-        set_todo_text(value);
+        set_new_todo_text(value);
     };
 
     // we use local_resource here because
@@ -110,7 +135,8 @@ pub fn show_todos() -> impl IntoView {
     //    (during SSR, create_resource will begin loading on the server and resolve on the client)
     let todos = create_local_resource(todo_count, fetch_todos);
     let deleted_todo = create_local_resource(delete_id, delete_todo);
-    let new_todo = create_local_resource(todo_text, create_todo);
+    let new_todo = create_local_resource(new_todo_text, create_todo);
+    let completed_todo = create_local_resource(updated_todo, update_todo_completed);
 
     let fallback = move |errors: RwSignal<Errors>| {
         let error_list = move || {
@@ -153,6 +179,17 @@ pub fn show_todos() -> impl IntoView {
                         }>
                         "Delete"
                      </button>
+                     <button on:click=move |_| {
+                            set_updated_todo.update(|tc| {
+                                    *tc = Todo {
+                                        id: t.id,
+                                        text: t.text.clone(),
+                                        completed: true,
+                                    }
+                                });
+                        }>
+                        "Complete"
+                     </button>
                      <br/>
                      <br/>
                     }
@@ -164,7 +201,7 @@ pub fn show_todos() -> impl IntoView {
     view! {
         <div>
             <label>
-                "How many todos would you like?  "
+                "How many todos would you like? "
                 <input
                     type="number"
                     prop:value=move || todo_count.get().to_string()
@@ -176,15 +213,6 @@ pub fn show_todos() -> impl IntoView {
             </label>
             <br/>
             <br/>
-            <ErrorBoundary fallback>
-                <Transition fallback=move || {
-                    view! { <div>"Loading (Suspense Fallback)..."</div> }
-                }>
-                <div>
-                    {todos_view}
-                </div>
-                </Transition>
-            </ErrorBoundary>
             <p>
                  <button on:click=move |_| {
                         todos.refetch();
@@ -196,20 +224,31 @@ pub fn show_todos() -> impl IntoView {
             </p>
             <br/>
             <br/>
+            <ErrorBoundary fallback>
+                <Transition fallback=move || {
+                    view! { <div>"Loading (Suspense Fallback)..."</div> }
+                }>
+                <div>
+                    {todos_view}
+                </div>
+                </Transition>
+            </ErrorBoundary>
+            <br/>
+            <br/>
             New Todo:
             <form on:submit=on_submit>
-            <input type="text"
-                // here, we use the `value` *attribute* to set only
-                // the initial value, letting the browser maintain
-                // the state after that
-                value=todo_text
+                <input type="text"
+                    // here, we use the `value` *attribute* to set only
+                    // the initial value, letting the browser maintain
+                    // the state after that
+                    value=new_todo_text
 
-                // store a reference to this input in `input_element`
-                node_ref=input_element
-            />
-            <input type="submit" value="Submit"/>
-        </form>
-        <p>"Todo text is: " {todo_text}</p>
+                    // store a reference to this input in `input_element`
+                    node_ref=new_todo_text_input_element
+                />
+                <input type="submit" value="Submit"/>
+            </form>
+            <p>"Todo text is: " {new_todo_text}</p>
         </div>
     }
 }
