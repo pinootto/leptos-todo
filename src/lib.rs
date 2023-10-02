@@ -46,6 +46,7 @@ async fn fetch_todos(count: TodoCount) -> Result<Vec<Todo>> {
         // .take(count)
         // .map(|cat| cat.url)
         // .collect::<Vec<_>>();
+        logging::log!("todos = {:#?}", res);
         Ok(res)
     } else {
         Err(TodoError::NonZeroTodos.into())
@@ -60,10 +61,10 @@ async fn delete_todo(id: i32) -> Result<String> {
             .await?
             .text()
             .await?;
-        println!("deleted todo = {body}");
+        logging::log!("deleted todo = {body}");
         Ok(body)
     } else {
-        println!("nothing to delete");
+        logging::log!("nothing to delete");
         Ok("no delete".to_string())
     }
 }
@@ -79,10 +80,10 @@ async fn create_todo(text: String) -> Result<String> {
             .await?
             .text()
             .await?;
-        println!("created todo = {body}");
+        logging::log!("created todo = {body}");
         Ok(body)
     } else {
-        println!("nothing to create");
+        logging::log!("nothing to create");
         Ok("no create".to_string())
     }
 }
@@ -97,7 +98,7 @@ async fn update_todo_completed(todo: Todo) -> Result<String> {
         .await?
         .text()
         .await?;
-    println!("updated todo completed = {body}");
+    logging::log!("updated todo completed = {body}");
     Ok(body)
 }
 
@@ -111,7 +112,7 @@ async fn update_todo_text(todo: Todo) -> Result<String> {
         .await?
         .text()
         .await?;
-    println!("updated todo text = {body}");
+    logging::log!("updated todo text = {body}");
     Ok(body)
 }
 
@@ -249,6 +250,19 @@ pub fn show_todos() -> impl IntoView {
             </label>
             <br/>
             <br/>
+            New Todo:
+            <form on:submit=on_submit_new_todo_text>
+                <input type="text"
+                    // here, we use the `value` *attribute* to set only
+                    // the initial value, letting the browser maintain
+                    // the state after that
+                    value=new_todo_text
+
+                    // store a reference to this input in `input_element`
+                    node_ref=new_todo_text_input_element
+                />
+                <input type="submit" value="Submit"/>
+            </form>
             <p>
                  <button on:click=move |_| {
                         todos.refetch();
@@ -271,20 +285,6 @@ pub fn show_todos() -> impl IntoView {
             </ErrorBoundary>
             <br/>
             <br/>
-            New Todo:
-            <form on:submit=on_submit_new_todo_text>
-                <input type="text"
-                    // here, we use the `value` *attribute* to set only
-                    // the initial value, letting the browser maintain
-                    // the state after that
-                    value=new_todo_text
-
-                    // store a reference to this input in `input_element`
-                    node_ref=new_todo_text_input_element
-                />
-                <input type="submit" value="Submit"/>
-            </form>
-            <p>"Todo text is: " {new_todo_text}</p>
         </div>
     }
 }
